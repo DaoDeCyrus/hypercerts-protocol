@@ -166,9 +166,6 @@ abstract contract ERC3525Upgradeable is
     }
 
     function _isApprovedOrOwner(address operator_, uint256 tokenId_) internal view virtual returns (bool) {
-        if (!_exists(tokenId_)) {
-            revert NonExistentToken(tokenId_);
-        }
         address owner = ERC3525Upgradeable.ownerOf(tokenId_);
         return (operator_ == owner ||
             ERC3525Upgradeable.isApprovedForAll(owner, operator_) ||
@@ -193,7 +190,9 @@ abstract contract ERC3525Upgradeable is
             revert InvalidApproval(tokenId_, to_, owner);
         }
 
-        if (!ERC3525Upgradeable._isApprovedOrOwner(_msgSender(), tokenId_)) {
+        if (owner != _msgSender() &&
+            !ERC3525Upgradeable.isApprovedForAll(owner, _msgSender()) &&
+            !ERC3525Upgradeable.getApproved(tokenId_) == _msgSender())) {
             revert NotApprovedOrOwner();
         }
 
@@ -203,13 +202,14 @@ abstract contract ERC3525Upgradeable is
     function approve(address to_, uint256 tokenId_) public virtual override {
         address owner = ERC3525Upgradeable.ownerOf(tokenId_);
         if (to_ == owner) {
-            revert InvalidApproval(tokenId_, msg.sender, to_);
+            revert InvalidApproval(tokenId_, to_, to_);
         }
-        if (!ERC3525Upgradeable._isApprovedOrOwner(_msgSender(), tokenId_)) {
+
+        if (owner != _msgSender()) {
             revert NotApprovedOrOwner();
         }
 
-        _approve(to_, tokenId_);
+        _approve(owner, to_, tokenId_);
     }
 
     function getApproved(uint256 tokenId_) public view virtual override returns (address) {
@@ -277,6 +277,7 @@ abstract contract ERC3525Upgradeable is
         if (!_isApprovedOrOwner(_msgSender(), tokenId_)) {
             revert NotApprovedOrOwner();
         }
+
         _safeTransferTokenId(from_, to_, tokenId_, data_);
     }
 
@@ -456,9 +457,9 @@ abstract contract ERC3525Upgradeable is
      * ALLOWANCES
      ******************/
 
-    function _approve(address to_, uint256 tokenId_) internal virtual {
+    function _approve(address owner_, address to_, uint256 tokenId_) internal virtual {
         _allTokens[_allTokensIndex[tokenId_]].approved = to_;
-        emit Approval(ERC3525Upgradeable.ownerOf(tokenId_), to_, tokenId_);
+        emit Approval(owner_, to_, tokenId_);
     }
 
     function _approveValue(
@@ -580,7 +581,8 @@ abstract contract ERC3525Upgradeable is
         address to_,
         uint256 tokenId_
     ) internal virtual {
-        if (ownerOf(tokenId_) != from_) {
+        address owner = ownerOf(tokenId_);
+        if (owner != from_) {
             revert NotApprovedOrOwner();
         }
         if (to_ == address(0)) {
@@ -589,7 +591,7 @@ abstract contract ERC3525Upgradeable is
 
         _beforeValueTransfer(from_, to_, tokenId_, tokenId_, slotOf(tokenId_), balanceOf(tokenId_));
 
-        _approve(address(0), tokenId_);
+        _approve(owner, address(0), tokenId_);
         _clearApprovedValues(tokenId_);
 
         _removeTokenFromOwnerEnumeration(from_, tokenId_);
